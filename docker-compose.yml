@@ -59,7 +59,7 @@ services:
     depends_on:
       - proxy
   cron:
-    build: https://ghcr.io/soft4mfo/passportdb_cron
+    build: https://github.com/soft4mfo/passportdb_cron.git#main
     restart: always
     env_file:
       - ./passport.env
