@@ -1,0 +1,6 @@
+
+    location /static/ {
+        alias /home/app/web/static/;
+    }
+
+

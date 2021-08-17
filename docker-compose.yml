@@ -1,0 +1,105 @@
+version: '3'
+
+services:
+  fssp:
+    image: ghcr.io/soft4mfo/fssp:latest
+    command: gunicorn conf.wsgi:application --bind 0.0.0.0:8000
+    restart: always
+    expose:
+      - 8000
+    volumes:
+      - static_volume:/home/app/web/static
+    env_file:
+      - ./fssp.env
+    environment:
+      - VIRTUAL_PORT=8000
+      - VIRTUAL_PATH=/fssp/
+      - FSSP_STATIC_ROOT=/home/app/web/static/fssp/
+      - FSSP_STATIC_URL=/static/fssp/
+    depends_on:
+      - db
+    networks:
+      - proxy-tier
+      - default
+  db:
+    image: postgres:12.0-alpine
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    env_file:
+      - ./fssp.env
+  proxy:
+    image: nginxproxy/nginx-proxy:alpine
+    restart: always
+    ports:
+      - 80:80
+      - 443:443
+    labels:
+      com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy: "true"
+    volumes:
+      - certs:/etc/nginx/certs
+      - ./nginx-vhost/:/etc/nginx/vhost.d
+      - static_volume:/home/app/web/static
+      - html:/usr/share/nginx/html
+      - dhparam:/etc/nginx/dhparam
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    networks:
+      - proxy-tier
+  letsencrypt-companion:
+    image: nginxproxy/acme-companion
+    restart: always
+    volumes:
+      - ./nginx-vhost/:/etc/nginx/vhost.d
+      - certs:/etc/nginx/certs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - acme:/etc/acme.sh
+      - html:/usr/share/nginx/html
+    networks:
+      - proxy-tier
+    depends_on:
+      - proxy
+  cron:
+    build: https://ghcr.io/soft4mfo/passportdb_cron
+    restart: always
+    env_file:
+      - ./passport.env
+    depends_on:
+      - db_passport
+  passport:
+    image: ghcr.io/soft4mfo/passport:latest
+    command: gunicorn passport.wsgi:application --bind 0.0.0.0:8001
+    restart: always
+    volumes:
+      - static_volume:/home/app/web/static
+    expose:
+      - 8001
+    env_file:
+      - ./passport.env
+    environment:
+      - VIRTUAL_PORT=8001
+      - VIRTUAL_PATH=/passport/
+      - PASSPORT_STATIC_ROOT=/home/app/web/static/passport/
+      - PASSPORT_STATIC_URL=/static/passport/
+    depends_on:
+      - db_passport
+    networks:
+      - proxy-tier
+      - default
+  db_passport:
+    image: postgres:12.0-alpine
+    restart: always
+    volumes:
+      - postgres_passport_data:/var/lib/postgresql/data/
+    env_file:
+      - ./passport.env
+volumes:
+  postgres_data:
+  postgres_passport_data:
+  static_volume:
+  acme:
+  certs:
+  html:
+  dhparam:
+  
+networks:
+  proxy-tier:
